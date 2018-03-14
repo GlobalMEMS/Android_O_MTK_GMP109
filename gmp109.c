@@ -1,4 +1,4 @@
-/* ST LSM6DS3H Accelerometer sensor driver
+/* GlobalMEMS GMP109 Barometer sensor driver
  *
  *
  *
@@ -22,7 +22,6 @@
 #include <hwmsensor.h>
 #include <barometer.h>
 #include "gmp109.h"
-//#include "gmp109_API.h"
 
 
 /*---------------------------------------------------------------------------*/
@@ -129,14 +128,6 @@ static int GMP109_SetMode(struct i2c_client *client, u8 mode);
 static int GMP109_ReadBaroRawData(struct i2c_client *client, s32 data[GMP109_AXES_NUM]);
 static int gmp109_suspend(struct device *dev);
 static int gmp109_resume(struct device *dev);
-//static int GMP109_SetSampleRate(struct i2c_client *client, u8 sample_rate);
-
-#if 0
-static int GMP109_Enable_Func(struct i2c_client *client, GMP109_ACC_GYRO_FUNC_EN_t newValue);
-static int GMP109_Int_Ctrl(struct i2c_client *client, GMP109_ACC_GYRO_INT_ACTIVE_t int_act,
-			     GMP109_ACC_GYRO_INT_LATCH_CTL_t int_latch);
-#endif
-
 static int gmp109_local_init(void);
 static int gmp109_local_uninit(void);
 
@@ -193,12 +184,9 @@ static bool enable_status;
 
 #define GSE_TAG                  "[GMP109]"
 
-//#define GSE_FUN(f)               pr_debug(GSE_TAG"%s\n", __func__)
-#define GSE_FUN(f)               pr_err(GSE_TAG"%s\n", __func__)
+#define GSE_FUN(f)               pr_debug(GSE_TAG"%s\n", __func__)
 #define GSE_PR_ERR(fmt, args...)    pr_err(GSE_TAG "%s %d : " fmt, __func__, __LINE__, ##args)
-//#define GSE_LOG(fmt, args...)    pr_debug(GSE_TAG "%s %d : " fmt, __func__, __LINE__, ##args)
-#define GSE_LOG(fmt, args...)    pr_err(GSE_TAG "%s %d : " fmt, __func__, __LINE__, ##args)
-
+#define GSE_LOG(fmt, args...)    pr_debug(GSE_TAG "%s %d : " fmt, __func__, __LINE__, ##args)
 
 static int mpu_i2c_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 len)
 {
@@ -289,54 +277,26 @@ int GMP109_hwmsen_write_block(u8 addr, u8 *buf, u8 len)
 }
 EXPORT_SYMBOL(GMP109_hwmsen_write_block);
 
-/*static int GMP109_set_bank(struct i2c_client *client, u8 bank)
-{
-	int res = 0;
-	u8 databuf[2];
-
-	databuf[0] = bank;
-	res = mpu_i2c_write_block(client, GMP109_WHO_AM_I, databuf, 0x1);
-	if (res < 0) {
-		GSE_PR_ERR("GMP109_set_bank fail at %x", bank);
-		return GMP109_ERR_I2C;
-	}
-
-	return GMP109_SUCCESS;
-}
-*/
 /*----------------------------------------------------------------------------*/
 
-#if 1
 static void GMP109_dumpReg(struct i2c_client *client)
 {
 	int i = 0;
-	u8 addr = 0x10;
 	u8 regdata = 0;
+	u8 reg_address[12]={2,3,4,5,6,7,8,9,0x0a,0x0b,0x0d,0x0f};
 
-	for (i = 0; i < 25; i++) {
+	for (i = 0; i < 12; i++) {
 		/*dump all*/
-		mpu_i2c_read_block(client, addr, &regdata, 0x01);
-		GSE_LOG("Reg addr=%x regdata=%x\n", addr, regdata);
-		addr++;
+		mpu_i2c_read_block(client, reg_address[i], &regdata, 0x01);
+		GSE_LOG("Reg addr=%02xh regdata=%x\n", reg_address[i], regdata);
 	}
 }
-#endif
+
 static void GMP109_power(struct baro_hw *hw, unsigned int on)
 {
 	static unsigned int power_on;
 
 	GSE_LOG("power %s\n", on ? "on" : "off");
-#if 0
-	if (power_on == on)	/*power status not change*/
-		GSE_LOG("ignore power control: %d\n", on);
-	else if (on) {		/* power on*/
-		if (!hwPowerOn(hw->power_id, hw->power_vol, "LSM6DS3H"))
-			GSE_PR_ERR("power on fails!!\n");
-	} else {			/* power off*/
-		if (!hwPowerDown(hw->power_id, "LSM6DS3H"))
-			GSE_PR_ERR("power off fail!!\n");
-	}
-#endif
 	power_on = on;
 }
 
@@ -470,6 +430,7 @@ static int GMP109_SetMode(struct i2c_client *client,u8 mode)//force,contineous m
 		GSE_PR_ERR("write GMP109 CTRL1 register err!\n");
 		return GMP109_ERR_I2C;
 	}
+#if 0	
 	res = mpu_i2c_read_block(client, GMP109_CTRL1, databuf, 0x1);
 	if (res < 0)
 	{
@@ -477,246 +438,8 @@ static int GMP109_SetMode(struct i2c_client *client,u8 mode)//force,contineous m
 		return GMP109_ERR_I2C;
 	}	
 	GSE_LOG("GMP109_CTRL1 :databuf[0] = 0x%02x \n", databuf[0]);
-	
+#endif	
  	return GMP109_SUCCESS;
-}
-
-
-
-#if 0 //Steve 20180313
-static int GMP109_SetPowerMode(struct i2c_client *client, bool enable)
-{
-	u8 databuf[2] = { 0 };
-	int res = 0;
-	struct gmp109_i2c_data *obj = i2c_get_clientdata(client);	/*obj_i2c_data;*/
-
-	if (enable == sensor_power) {
-		GSE_LOG("Sensor power status is newest!\n");
-		return GMP109_SUCCESS;
-	}
-
-	if (mpu_i2c_read_block(client, GMP109_CTRL1_XL, databuf, 0x01)) {
-		GSE_PR_ERR("read lsm6ds3h power ctl register err!\n");
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("GMP109_CTRL1_XL:databuf[0] =  %x!\n", databuf[0]);
-
-
-	if (true == enable) {
-		databuf[0] &= ~GMP109_ACC_ODR_MASK;	/*clear lsm6ds3h  ODR bits*/
-		databuf[0] |= obj->sample_rate;	/*GMP109_ACC_ODR_104HZ; //default set 100HZ for LSM6DS3H acc*/
-	} else {
-		/* do nothing*/
-		databuf[0] &= ~GMP109_ACC_ODR_MASK;	/*clear lsm6ds3h acc ODR bits*/
-		databuf[0] |= GMP109_ACC_ODR_POWER_DOWN;
-	}
-	/*databuf[1] = databuf[0];*/
-	/*databuf[0] = GMP109_CTRL1_XL;*/
-	res = mpu_i2c_write_block(client, GMP109_CTRL1_XL, databuf, 0x1);
-	if (res < 0) {
-		GSE_LOG("LSM6DS3H set power mode: ODR 100hz failed!\n");
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("set LSM6DS3H  power mode:ODR 100HZ ok %d!\n", enable);
-
-	sensor_power = enable;
-
-	return GMP109_SUCCESS;
-}
-
-
-/*----------------------------------------------------------------------------*/
-static int GMP109_SetFullScale(struct i2c_client *client, u8 acc_fs)
-{
-	u8 databuf[2] = { 0 };
-	int res = 0;
-	struct gmp109_i2c_data *obj = i2c_get_clientdata(client);
-
-	GSE_FUN();
-
-	if (mpu_i2c_read_block(client, GMP109_CTRL1_XL, databuf, 0x01)) {
-		GSE_PR_ERR("read GMP109_CTRL1_XL err!\n");
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("read  GMP109_CTRL1_XL register: 0x%x\n", databuf[0]);
-
-	databuf[0] &= ~GMP109_ACC_RANGE_MASK;	/*clear*/
-	databuf[0] |= acc_fs;
-
-	/*databuf[1] = databuf[0];*/
-	/*databuf[0] = GMP109_CTRL1_XL;*/
-
-	res = mpu_i2c_write_block(client, GMP109_CTRL1_XL, databuf, 0x1);
-	if (res < 0) {
-		GSE_PR_ERR("write full scale register err!\n");
-		return GMP109_ERR_I2C;
-	}
-	switch (acc_fs) {
-	case GMP109_ACC_RANGE_2g:
-		obj->sensitivity = GMP109_ACC_SENSITIVITY_2G;
-		break;
-	case GMP109_ACC_RANGE_4g:
-		obj->sensitivity = GMP109_ACC_SENSITIVITY_4G;
-		break;
-	case GMP109_ACC_RANGE_8g:
-		obj->sensitivity = GMP109_ACC_SENSITIVITY_8G;
-		break;
-	case GMP109_ACC_RANGE_16g:
-		obj->sensitivity = GMP109_ACC_SENSITIVITY_16G;
-		break;
-	default:
-		obj->sensitivity = GMP109_ACC_SENSITIVITY_2G;
-		break;
-	}
-
-	if (mpu_i2c_read_block(client, GMP109_CTRL9_XL, databuf, 0x01)) {
-		GSE_PR_ERR("read GMP109_CTRL9_XL err!\n");
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("read  GMP109_CTRL9_XL register: 0x%x\n", databuf[0]);
-
-	databuf[0] &= ~GMP109_ACC_ENABLE_AXIS_MASK;	/*clear*/
-	databuf[0] |=
-	    GMP109_ACC_ENABLE_AXIS_X | GMP109_ACC_ENABLE_AXIS_Y | GMP109_ACC_ENABLE_AXIS_Z;
-
-	/*databuf[1] = databuf[0];*/
-	/*databuf[0] = GMP109_CTRL9_XL;*/
-
-	res = mpu_i2c_write_block(client, GMP109_CTRL9_XL, databuf, 0x1);
-	if (res < 0) {
-		GSE_PR_ERR("write full scale register err!\n");
-		return GMP109_ERR_I2C;
-	}
-
-	return GMP109_SUCCESS;
-}
-
-/*----------------------------------------------------------------------------*/
-/* set the acc sample rate*/
-static int GMP109_SetSampleRate(struct i2c_client *client, u8 sample_rate)
-{
-	u8 databuf[2] = { 0 };
-	int res = 0;
-
-	GSE_FUN();
-	/*set Sample Rate will enable power and should changed power status*/
-	res = GMP109_SetPowerMode(client, true);
-	if (res != GMP109_SUCCESS)
-		return res;
-
-	if (mpu_i2c_read_block(client, GMP109_CTRL1_XL, databuf, 0x01)) {
-		GSE_PR_ERR("read acc data format register err!\n");
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("read  acc data format register: 0x%x\n", databuf[0]);
-
-	databuf[0] &= ~GMP109_ACC_ODR_MASK;	/*clear*/
-	databuf[0] |= sample_rate;
-
-	/*databuf[1] = databuf[0];*/
-	/*databuf[0] = GMP109_CTRL1_XL;*/
-
-	res = mpu_i2c_write_block(client, GMP109_CTRL1_XL, databuf, 0x1);
-	if (res < 0) {
-		GSE_PR_ERR("write sample rate register err!\n");
-		return GMP109_ERR_I2C;
-	}
-
-	return GMP109_SUCCESS;
-}
-#endif
-#if 0
-static int GMP109_Int_Ctrl(struct i2c_client *client, GMP109_ACC_GYRO_INT_ACTIVE_t int_act,
-			     GMP109_ACC_GYRO_INT_LATCH_CTL_t int_latch)
-{
-	u8 databuf[2] = { 0 };
-	int res = 0;
-	u8 op_reg = 0;
-
-	GSE_FUN();
-
-	/*config latch int or no latch*/
-	op_reg = GMP109_TAP_CFG;
-	if (mpu_i2c_read_block(client, op_reg, databuf, 0x01)) {
-		GSE_PR_ERR("%s read data format register err!\n", __func__);
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("read  acc data format register: 0x%x\n", databuf[0]);
-
-	databuf[0] &= ~GMP109_ACC_GYRO_INT_LATCH_CTL_MASK;	/*clear*/
-	databuf[0] |= int_latch;
-
-	/*databuf[1] = databuf[0];*/
-	/*databuf[0] = op_reg;*/
-	res = mpu_i2c_write_block(client, op_reg, databuf, 0x01);
-	if (res < 0) {
-		GSE_PR_ERR("write enable tilt func register err!\n");
-		return GMP109_ERR_I2C;
-	}
-	/* config high or low active*/
-	op_reg = GMP109_CTRL3_C;
-	if (mpu_i2c_read_block(client, op_reg, databuf, 0x01)) {
-		GSE_PR_ERR("%s read data format register err!\n", __func__);
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("read  acc data format register: 0x%x\n", databuf[0]);
-
-	databuf[0] &= ~GMP109_ACC_GYRO_INT_ACTIVE_MASK;	/*clear*/
-	databuf[0] |= int_act;
-
-	/*databuf[1] = databuf[0];*/
-	/*databuf[0] = op_reg;*/
-	res = mpu_i2c_write_block(client, op_reg, databuf, 0x1);
-	if (res < 0) {
-		GSE_PR_ERR("write enable tilt func register err!\n");
-		return GMP109_ERR_I2C;
-	}
-
-	return GMP109_SUCCESS;
-}
-
-static int GMP109_Enable_Func(struct i2c_client *client, GMP109_ACC_GYRO_FUNC_EN_t newValue)
-{
-	u8 databuf[2] = { 0 };
-	int res = 0;
-
-	GSE_FUN();
-
-	if (mpu_i2c_read_block(client, GMP109_CTRL10_C, databuf, 0x01)) {
-		GSE_PR_ERR("%s read GMP109_CTRL10_C register err!\n", __func__);
-		return GMP109_ERR_I2C;
-	}
-	GSE_LOG("%s read acc data format register: 0x%x\n", __func__, databuf[0]);
-	databuf[0] &= ~GMP109_ACC_GYRO_FUNC_EN_MASK;	/*clear*/
-	databuf[0] |= newValue;
-
-	/*databuf[1] = databuf[0];*/
-	/*databuf[0] = GMP109_CTRL10_C;*/
-	res = mpu_i2c_write_block(client, GMP109_CTRL10_C, databuf, 0x01);
-	if (res < 0) {
-		GSE_PR_ERR("%s write GMP109_CTRL10_C register err!\n", __func__);
-		return GMP109_ERR_I2C;
-	}
-
-	return GMP109_SUCCESS;
-}
-#endif
-
-s16 GMP109_acc_TransfromResolution(s16 rawData, int sensitivity)
-{
-	s64 tempValue;
-	s64 tempPlusValue = 0;
-
-	tempValue = (s64) (rawData) * sensitivity * GRAVITY_EARTH_1000;
-	if (tempValue < 0) {
-		tempPlusValue = tempValue * -1;
-		do_div(tempPlusValue, (1000 * 1000));
-		tempValue = tempPlusValue * -1;
-	} else {
-		do_div(tempValue, (1000 * 1000));
-	}
-
-	return (s16) tempValue;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -763,16 +486,16 @@ static int GMP109_ReadBaroData(struct i2c_client *client, char *buf, int bufsize
 
 static int GMP109_ReadBaroRawData(struct i2c_client *client, s32 data[GMP109_AXES_NUM])
 {
-	int err = 0;
+	int err = 0,retry=0;
 	char databuf[6] = { 0 };
+	
 
 	if (client == NULL)
 		err = -EINVAL;
 	else {
 		
 		GMP109_SetMode(client, GMP109_Force_mode);
-		mdelay(10);
-#if 0
+		mdelay(5);
 		do{
 			GSE_LOG("Set Force_mode\n");
 			err = mpu_i2c_read_block(client, GMP109_STATUS, databuf, 0x1);
@@ -782,9 +505,8 @@ static int GMP109_ReadBaroRawData(struct i2c_client *client, s32 data[GMP109_AXE
 				return GMP109_ERR_I2C;
 			}	
 			mdelay(1);
-			GSE_LOG("DRDY=0x%02x)\n",databuf[0]);
+			GSE_LOG("DRDY=0x%02x,retry=%d)\n",databuf[0],retry);
 		}while(!(databuf[0]&GMP109_DRDY_VALUE));
-#endif		
 		if (hwmsen_read_block(client, GMP109_TEMPH, databuf, 6)) 
 		{
 			GSE_PR_ERR("GMP109 read baro data  error\n");
@@ -823,7 +545,7 @@ static int GMP109_ReadChipInfo(struct i2c_client *client, char *buf, int bufsize
 		return -2;
 	}
 
-	sprintf(buf, "GMP109 02 Chip");
+	sprintf(buf, "GLOBALMEMS GMP109 BAROMETER");
 	return 0;
 }
 
@@ -1068,27 +790,9 @@ static int GMP109_init_client(struct i2c_client *client, bool enable)
 	struct gmp109_i2c_data *obj = i2c_get_clientdata(client);
 	GSE_FUN();
 	GSE_LOG(" gmp109 addr 0x%02x!\n", client->addr);
-#if 0
-	res = GMP109_CheckDeviceID(client);
-	if (res != GMP109_SUCCESS)
-		return res;
-
-	res = GMP109_Set_RegInc(client, true);
-	if (res != GMP109_SUCCESS)
-		return res;
-
-	res = GMP109_SetFullScale(client, GMP109_ACC_RANGE_2g);	/*we have only this choice*/
-	if (res != GMP109_SUCCESS)
-		return res;
-	res = GMP109_SetSampleRate(client, obj->sample_rate);
-	if (res != GMP109_SUCCESS)
-		return res;
-
-	res = GMP109_SetPowerMode(client, enable);
-	if (res != GMP109_SUCCESS)
-		return res;
-#endif
-  
+ 	
+	GMP109_SetRegister(obj->client,GMP109_RESET,GMP109_RESET_COMMAND);
+ 	
 	GSE_LOG("GMP109_init_client OK!\n");
 	/*acc setting*/
 
@@ -1136,9 +840,8 @@ static int gmp109_enable_nodata(int en)
 
 static int gmp109_set_delay(u64 ns)
 {
-	int value = 0;
-//	int err = 0;
-//	u8 sample_delay = 0;
+	int value = 5;
+/*	
 	struct gmp109_i2c_data *priv = obj_i2c_data;
 
 	value = (int)ns / 1000000LL;
@@ -1159,6 +862,7 @@ static int gmp109_set_delay(u64 ns)
 		priv->fir.sum[GMP109_AXIS_Z] = 0;
 		atomic_set(&priv->filter, 1);
 	}
+*/	
 	GSE_LOG("%s delay=%d ms\n", __func__, value);
 
 	return 0;
@@ -1197,311 +901,18 @@ static int gmp109_get_data(int *x, int *status)
 
 	if (sscanf(buff, "%x %x %x", x, &y, &z) != 3)
 		GSE_LOG("get data format error\n");
-//	else
+	
 	*status = SENSOR_STATUS_ACCURACY_HIGH;
 	GSE_LOG("Pressure=%d,status=%d\n",*x,*status);
 
 	return 0;
 }
 
-#if 0				/*ioctl related */
-/******************************************************************************
- * Function Configuration
-******************************************************************************/
-static int gmp109_open(struct inode *inode, struct file *file)
-{
-	file->private_data = gmp109_acc_i2c_client;
-
-	if (file->private_data == NULL) {
-		GSE_PR_ERR("null pointer!!\n");
-		return -EINVAL;
-	}
-	return nonseekable_open(inode, file);
-}
-
-/*----------------------------------------------------------------------------*/
-static int gmp109_release(struct inode *inode, struct file *file)
-{
-	file->private_data = NULL;
-	return 0;
-}
-
-/*----------------------------------------------------------------------------*/
-static long gmp109_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	struct i2c_client *client = (struct i2c_client *)file->private_data;
-	struct gmp109_i2c_data *obj = (struct gmp109_i2c_data *)i2c_get_clientdata(client);
-	char strbuf[GMP109_BUFSIZE];
-	void __user *data;
-	struct SENSOR_DATA sensor_data;
-	int err = 0;
-	int cali[3];
-
-	/*GSE_FUN(f);*/
-	if (_IOC_DIR(cmd) & _IOC_READ)
-		err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
-	else if (_IOC_DIR(cmd) & _IOC_WRITE)
-		err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
-
-
-	if (err) {
-		GSE_PR_ERR("access error: %08X, (%2d, %2d)\n", cmd, _IOC_DIR(cmd), _IOC_SIZE(cmd));
-		return -EFAULT;
-	}
-
-	switch (cmd) {
-	case GSENSOR_IOCTL_INIT:
-		break;
-
-	case GSENSOR_IOCTL_READ_CHIPINFO:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		GMP109_ReadChipInfo(client, strbuf, GMP109_BUFSIZE);
-		if (copy_to_user(data, strbuf, strlen(strbuf) + 1)) {
-			err = -EFAULT;
-			break;
-		}
-		break;
-
-	case GSENSOR_IOCTL_READ_SENSORDATA:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		GMP109_ReadBaroData(client, strbuf, GMP109_BUFSIZE);
-
-		if (copy_to_user(data, strbuf, strlen(strbuf) + 1)) {
-			err = -EFAULT;
-			break;
-		}
-		break;
-
-	case GSENSOR_IOCTL_READ_GAIN:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		break;
-
-	case GSENSOR_IOCTL_READ_OFFSET:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		break;
-
-	case GSENSOR_IOCTL_READ_RAW_DATA:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		GMP109_ReadBaroRawData(client, (s16 *) strbuf);
-		if (copy_to_user(data, strbuf, strlen(strbuf) + 1)) {
-			err = -EFAULT;
-			break;
-		}
-		break;
-
-	case GSENSOR_IOCTL_SET_CALI:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-		if (copy_from_user(&sensor_data, data, sizeof(sensor_data))) {
-			err = -EFAULT;
-			break;
-		}
-		if (atomic_read(&obj->suspend)) {
-			GSE_PR_ERR("Perform calibration in suspend state!!\n");
-			err = -EINVAL;
-		} else {
-#if 0
-			cali[GMP109_AXIS_X] =
-			    (s64) (sensor_data.x) * 1000 * 1000 / (obj->sensitivity * GRAVITY_EARTH_1000);	/*NTC*/
-			cali[GMP109_AXIS_Y] =
-			    (s64) (sensor_data.y) * 1000 * 1000 / (obj->sensitivity *
-								   GRAVITY_EARTH_1000);
-			cali[GMP109_AXIS_Z] =
-			    (s64) (sensor_data.z) * 1000 * 1000 / (obj->sensitivity *
-								   GRAVITY_EARTH_1000);
-#else
-			cali[GMP109_AXIS_X] = (s64) (sensor_data.x);
-			cali[GMP109_AXIS_Y] = (s64) (sensor_data.y);
-			cali[GMP109_AXIS_Z] = (s64) (sensor_data.z);
-#endif
-			err = GMP109_WriteCalibration(client, cali);
-		}
-		break;
-
-	case GSENSOR_IOCTL_CLR_CALI:
-		err = GMP109_ResetCalibration(client);
-		break;
-
-	case GSENSOR_IOCTL_GET_CALI:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-		err = GMP109_ReadCalibration(client, cali);
-		if (err < 0)
-			break;
-#if 0
-		sensor_data.x =
-		    (s64) (cali[GMP109_AXIS_X]) * obj->sensitivity * GRAVITY_EARTH_1000 / (1000 * 1000);	/*NTC*/
-		sensor_data.y =
-		    (s64) (cali[GMP109_AXIS_Y]) * obj->sensitivity * GRAVITY_EARTH_1000 / (1000 *
-											     1000);
-		sensor_data.z =
-		    (s64) (cali[GMP109_AXIS_Z]) * obj->sensitivity * GRAVITY_EARTH_1000 / (1000 *
-											     1000);
-#else
-		sensor_data.x = (s64) (cali[GMP109_AXIS_X]);
-		sensor_data.y = (s64) (cali[GMP109_AXIS_Y]);
-		sensor_data.z = (s64) (cali[GMP109_AXIS_Z]);
-#endif
-		if (copy_to_user(data, &sensor_data, sizeof(sensor_data))) {
-			err = -EFAULT;
-			break;
-		}
-		break;
-
-	default:
-		GSE_PR_ERR("unknown IOCTL: 0x%08x\n", cmd);
-		err = -ENOIOCTLCMD;
-		break;
-	}
-
-	return err;
-}
-
-#ifdef CONFIG_COMPAT
-static long gmp109_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	long err = 0;
-
-	void __user *arg32 = compat_ptr(arg);
-
-	if (!file->f_op || !file->f_op->unlocked_ioctl)
-		return -ENOTTY;
-
-	switch (cmd) {
-	case COMPAT_GSENSOR_IOCTL_READ_SENSORDATA:
-		if (arg32 == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		err =
-		    file->f_op->unlocked_ioctl(file, GSENSOR_IOCTL_READ_SENSORDATA,
-					       (unsigned long)arg32);
-		if (err) {
-			GSE_PR_ERR("GSENSOR_IOCTL_READ_SENSORDATA unlocked_ioctl failed.");
-			return err;
-		}
-		break;
-
-	case COMPAT_GSENSOR_IOCTL_SET_CALI:
-		if (arg32 == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		err =
-		    file->f_op->unlocked_ioctl(file, GSENSOR_IOCTL_SET_CALI, (unsigned long)arg32);
-		if (err) {
-			GSE_PR_ERR("GSENSOR_IOCTL_SET_CALI unlocked_ioctl failed.");
-			return err;
-		}
-		break;
-
-	case COMPAT_GSENSOR_IOCTL_GET_CALI:
-		if (arg32 == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		err =
-		    file->f_op->unlocked_ioctl(file, GSENSOR_IOCTL_GET_CALI, (unsigned long)arg32);
-		if (err) {
-			GSE_PR_ERR("GSENSOR_IOCTL_GET_CALI unlocked_ioctl failed.");
-			return err;
-		}
-		break;
-
-	case COMPAT_GSENSOR_IOCTL_CLR_CALI:
-		if (arg32 == NULL) {
-			err = -EINVAL;
-			break;
-		}
-
-		err =
-		    file->f_op->unlocked_ioctl(file, GSENSOR_IOCTL_CLR_CALI, (unsigned long)arg32);
-		if (err) {
-			GSE_PR_ERR("GSENSOR_IOCTL_CLR_CALI unlocked_ioctl failed.");
-			return err;
-		}
-		break;
-
-	default:
-		GSE_PR_ERR("unknown IOCTL: 0x%08x\n", cmd);
-		err = -ENOIOCTLCMD;
-		break;
-
-	}
-
-	return err;
-}
-#endif
-
-/*----------------------------------------------------------------------------*/
-static const struct file_operations gmp109_acc_fops = {
-	.owner = THIS_MODULE,
-	.open = gmp109_open,
-	.release = gmp109_release,
-	.unlocked_ioctl = gmp109_unlocked_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = gmp109_compat_ioctl,
-#endif
-};
-
-/*----------------------------------------------------------------------------*/
-static struct miscdevice gmp109_acc_device = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "gsensor",
-	.fops = &gmp109_acc_fops,
-};
-#endif				/*ioctl related */
 /*----------------------------------------------------------------------------*/
 
 static int gmp109_factory_enable_sensor(bool enabledisable, int64_t sample_periods_ms)
 {
 	int err;
-#if 0
-	err = bmi160_acc_enable_nodata(enabledisable == true ? 1 : 0);
-	if (err) {
-		GSE_PR_ERR("%s enable sensor failed!\n", __func__);
-		return -1;
-	}
-	err = bmi160_acc_batch(0, sample_periods_ms * 1000000, 0);
-	if (err) {
-		GSE_PR_ERR("%s enable set batch failed!\n", __func__);
-		return -1;
-	}
-#endif
 	err = GMP109_init_client(gmp109_acc_i2c_client, 0);
 	if (err) {
 		GSE_PR_ERR("initialize client fail!!\n");
@@ -1579,27 +990,14 @@ static int gmp109_factory_get_cali(int32_t *data)
 {
 	int err = 0;
 	int cali[3] = { 0 };
-#if 0
-	err = BMI160_ACC_ReadCalibration(obj_data, cali);
-	if (err) {
-		GSE_PR_ERR("bmi160_ReadCalibration failed!\n");
-		return -1;
-	}
-	data[0] = cali[BMI160_ACC_AXIS_X]
-	    * GRAVITY_EARTH_1000 / obj_data->reso->sensitivity;
-	data[1] = cali[BMI160_ACC_AXIS_Y]
-	    * GRAVITY_EARTH_1000 / obj_data->reso->sensitivity;
-	data[2] = cali[BMI160_ACC_AXIS_Z]
-	    * GRAVITY_EARTH_1000 / obj_data->reso->sensitivity;
-#endif
+
 	err = GMP109_ReadCalibration(gmp109_acc_i2c_client, cali);
 	if (err) {
 		GSE_PR_ERR("GMP109_ReadCalibration failed!\n");
 		return -1;
 	}
 	*data = cali[GMP109_AXIS_X];
-	//data[0] = cali[GMP109_AXIS_Y];
-	//data[2] = cali[GMP109_AXIS_Z];
+
 	return 0;
 }
 
@@ -1669,35 +1067,7 @@ static int gmp109_resume(struct device *dev)
 	return 0;
 }
 #endif
-/*
-static int gmp109_enable(int en)
-{
-	int value = 0;
-	int err = 0;
-	struct gmp109_i2c_data *f_obj = obj_i2c_data;
 
-	if (f_obj == NULL)
-		return -1;
-
-	value = en;
-	//factory_mode = 1;
-	if (value == 1) {
-		f_obj->enable = true;
-		
-	} else {
-		f_obj->enable = false;		
-	}
-	if (f_obj->flush) {
-		if (value == 1) {
-			MAGN_LOG("will call gmc306_flush in gmc306_enable\n");
-			barohub_flush();
-		} else
-			f_obj->flush = false;
-	}
-	wake_up(&open_wq);
-	return err;
-}
-*/
 /*----------------------------------------------------------------------------*/
 static int gmp109_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
@@ -1725,13 +1095,6 @@ static int gmp109_i2c_probe(struct i2c_client *client, const struct i2c_device_i
 
 	obj->hw = hw;
 	obj->sample_rate = 0x40;	/*104HZ??*/
-
-	/*atomic_set(&obj->layout, obj->hw->direction);
-	err = hwmsen_get_convert(obj->hw->direction, &obj->cvt);
-	if (err) {
-		GSE_PR_ERR("invalid direction: %d\n", obj->hw->direction);
-		goto exit_kfree;
-	}*/
 
 	obj_i2c_data = obj;
 	obj->client = client;
@@ -1838,12 +1201,6 @@ static int gmp109_local_uninit(void)
 
 static int gmp109_local_init(void)
 {
-	/*GSE_FUN();*/
-
-#if 0				/* sensors-1.0 */
-	GMP109_power(hw, 1);	/*??*/
-#endif
-
 	if (i2c_add_driver(&gmp109_i2c_driver)) {
 		GSE_PR_ERR("add driver error\n");
 		return -1;
