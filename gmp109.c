@@ -302,94 +302,6 @@ static void GMP109_power(struct baro_hw *hw, unsigned int on)
 
 /*----------------------------------------------------------------------------*/
 
-static int GMP109_write_rel_calibration(struct gmp109_i2c_data *obj, int dat[GMP109_AXES_NUM])
-{
-	obj->cali_sw[GMP109_AXIS_X] =
-	    obj->cvt.sign[GMP109_AXIS_X] * dat[obj->cvt.map[GMP109_AXIS_X]];
-	obj->cali_sw[GMP109_AXIS_Y] =
-	    obj->cvt.sign[GMP109_AXIS_Y] * dat[obj->cvt.map[GMP109_AXIS_Y]];
-	obj->cali_sw[GMP109_AXIS_Z] =
-	    obj->cvt.sign[GMP109_AXIS_Z] * dat[obj->cvt.map[GMP109_AXIS_Z]];
-#if DEBUG
-	if (atomic_read(&obj->trace) & ACCEL_TRC_CALI) {
-		GSE_LOG("test  (%5d, %5d, %5d) ->(%5d, %5d, %5d)->(%5d, %5d, %5d))\n",
-			obj->cvt.sign[GMP109_AXIS_X], obj->cvt.sign[GMP109_AXIS_Y],
-			obj->cvt.sign[GMP109_AXIS_Z], dat[GMP109_AXIS_X], dat[GMP109_AXIS_Y],
-			dat[GMP109_AXIS_Z], obj->cvt.map[GMP109_AXIS_X],
-			obj->cvt.map[GMP109_AXIS_Y], obj->cvt.map[GMP109_AXIS_Z]);
-		GSE_LOG("write calibration data  (%5d, %5d, %5d)\n", obj->cali_sw[GMP109_AXIS_X],
-			obj->cali_sw[GMP109_AXIS_Y], obj->cali_sw[GMP109_AXIS_Z]);
-	}
-#endif
-	return 0;
-}
-
-/*----------------------------------------------------------------------------*/
-static int GMP109_ResetCalibration(struct i2c_client *client)
-{
-	struct gmp109_i2c_data *obj = i2c_get_clientdata(client);
-
-	memset(obj->cali_sw, 0x00, sizeof(obj->cali_sw));
-	return 0;
-}
-
-/*----------------------------------------------------------------------------*/
-static int GMP109_ReadCalibration(struct i2c_client *client, int dat[GMP109_AXES_NUM])
-{
-	struct gmp109_i2c_data *obj = i2c_get_clientdata(client);
-
-	dat[obj->cvt.map[GMP109_AXIS_X]] =
-	    obj->cvt.sign[GMP109_AXIS_X] * obj->cali_sw[GMP109_AXIS_X];
-	dat[obj->cvt.map[GMP109_AXIS_Y]] =
-	    obj->cvt.sign[GMP109_AXIS_Y] * obj->cali_sw[GMP109_AXIS_Y];
-	dat[obj->cvt.map[GMP109_AXIS_Z]] =
-	    obj->cvt.sign[GMP109_AXIS_Z] * obj->cali_sw[GMP109_AXIS_Z];
-
-#if DEBUG
-	if (atomic_read(&obj->trace) & ACCEL_TRC_CALI) {
-		GSE_LOG("Read calibration data  (%5d, %5d, %5d)\n",
-			dat[GMP109_AXIS_X], dat[GMP109_AXIS_Y], dat[GMP109_AXIS_Z]);
-	}
-#endif
-
-	return 0;
-}
-
-/*----------------------------------------------------------------------------*/
-
-static int GMP109_WriteCalibration(struct i2c_client *client, int dat[GMP109_AXES_NUM])
-{
-	struct gmp109_i2c_data *obj = i2c_get_clientdata(client);
-	int cali[GMP109_AXES_NUM];
-
-	GSE_FUN();
-	if (!obj || !dat) {
-		GSE_PR_ERR("null ptr!!\n");
-		return -EINVAL;
-	}
-		cali[obj->cvt.map[GMP109_AXIS_X]] =
-		    obj->cvt.sign[GMP109_AXIS_X] * obj->cali_sw[GMP109_AXIS_X];
-		cali[obj->cvt.map[GMP109_AXIS_Y]] =
-		    obj->cvt.sign[GMP109_AXIS_Y] * obj->cali_sw[GMP109_AXIS_Y];
-		cali[obj->cvt.map[GMP109_AXIS_Z]] =
-		    obj->cvt.sign[GMP109_AXIS_Z] * obj->cali_sw[GMP109_AXIS_Z];
-		cali[GMP109_AXIS_X] += dat[GMP109_AXIS_X];
-		cali[GMP109_AXIS_Y] += dat[GMP109_AXIS_Y];
-		cali[GMP109_AXIS_Z] += dat[GMP109_AXIS_Z];
-#if DEBUG
-		if (atomic_read(&obj->trace) & ACCEL_TRC_CALI) {
-			GSE_LOG("write accel calibration data  (%5d, %5d, %5d)-->(%5d, %5d, %5d)\n",
-				dat[GMP109_AXIS_X], dat[GMP109_AXIS_Y], dat[GMP109_AXIS_Z],
-				cali[GMP109_AXIS_X], cali[GMP109_AXIS_Y],
-				cali[GMP109_AXIS_Z]);
-		}
-#endif
-		return GMP109_write_rel_calibration(obj, cali);
-
-}
-
-/*----------------------------------------------------------------------------*/
-
 static int GMP109_SetRegister(struct i2c_client *client, u8 reg,u8 data)
 {
 	u8 databuf[2] = { data,0 };
@@ -841,7 +753,7 @@ static int gmp109_enable_nodata(int en)
 static int gmp109_set_delay(u64 ns)
 {
 	int value = 5;
-/*	
+	
 	struct gmp109_i2c_data *priv = obj_i2c_data;
 
 	value = (int)ns / 1000000LL;
@@ -852,17 +764,6 @@ static int gmp109_set_delay(u64 ns)
 	}
 	priv->sample_rate = 66;
 
-	if (value >= 50)
-		atomic_set(&priv->filter, 0);
-	else {
-		priv->fir.num = 0;
-		priv->fir.idx = 0;
-		priv->fir.sum[GMP109_AXIS_X] = 0;
-		priv->fir.sum[GMP109_AXIS_Y] = 0;
-		priv->fir.sum[GMP109_AXIS_Z] = 0;
-		atomic_set(&priv->filter, 1);
-	}
-*/	
 	GSE_LOG("%s delay=%d ms\n", __func__, value);
 
 	return 0;
@@ -960,44 +861,16 @@ static int gmp109_factory_enable_calibration(void)
 
 static int gmp109_factory_clear_cali(void)
 {
-	int err = 0;
-
-	/* err = BMI160_ACC_ResetCalibration(obj_data); */
-	err = GMP109_ResetCalibration(gmp109_acc_i2c_client);
-	if (err) {
-		GSE_PR_ERR("gmp109_ResetCalibration failed!\n");
-		return -1;
-	}
 	return 0;
 }
 
 static int gmp109_factory_set_cali(int32_t data)
 {
-	int err = 0;
-	int cali[3] = { 0 };
-	cali[GMP109_AXIS_X] = data;
-	cali[GMP109_AXIS_Y] = data;
-	cali[GMP109_AXIS_Z] = data;
-	err = GMP109_WriteCalibration(gmp109_acc_i2c_client, cali);
-	if (err) {
-		GSE_PR_ERR("GMP109_WriteCalibration failed!\n");
-		return -1;
-	}
 	return 0;
 }
 
 static int gmp109_factory_get_cali(int32_t *data)
 {
-	int err = 0;
-	int cali[3] = { 0 };
-
-	err = GMP109_ReadCalibration(gmp109_acc_i2c_client, cali);
-	if (err) {
-		GSE_PR_ERR("GMP109_ReadCalibration failed!\n");
-		return -1;
-	}
-	*data = cali[GMP109_AXIS_X];
-
 	return 0;
 }
 
